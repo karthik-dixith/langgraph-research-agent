@@ -1,0 +1,73 @@
+name: keep-alive
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install playwright
+      - run: python -m playwright install --with-deps chromium
+
+      - name: Visit app, wake it if asleep, fail on error page
+        env:
+          APP_URL: https://langgraph-research-harness.streamlit.app
+        run: |
+          python - <<'PY'
+          import os, sys
+          from playwright.sync_api import sync_playwright
+
+          url = os.environ["APP_URL"]
+          SLEEP_MARK = "gone to sleep"
+          WAKE_TEXT = "get this app back up"
+          ERROR_MARKS = (
+              "oh no",
+              "error running app",
+              "error installing requirements",
+              "connection error",
+          )
+
+          def classify(text):
+              low = text.lower()
+              if SLEEP_MARK in low:
+                  return "asleep"
+              for mark in ERROR_MARKS:
+                  if mark in low:
+                      return "error"
+              return "awake"
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(url, timeout=90_000, wait_until="domcontentloaded")
+              page.wait_for_timeout(8_000)
+
+              state = classify(page.inner_text("body"))
+
+              if state == "asleep":
+                  button = page.get_by_text(WAKE_TEXT, exact=False)
+                  if button.count():
+                      button.first.click()
+                      page.wait_for_timeout(90_000)
+                      state = classify(page.inner_text("body"))
+
+              body = page.inner_text("body")[:400]
+              browser.close()
+
+          print(f"{url} -> {state}")
+          if state != "awake":
+              print("--- page text ---")
+              print(body)
+              sys.exit(1)
+          PY
