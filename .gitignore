@@ -1,0 +1,25 @@
+# virtual environments
+.venv/
+venv/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# secrets
+.env
+
+# generated at runtime
+reports/
+traces/
+*.sqlite
+
+# scratch work from the build
+explore/
+
+# editor
+.vscode/
